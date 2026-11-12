@@ -1,1 +1,888 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Minecraft 2D</title>
+<style>
+  /* ============ 鍩虹 ============ */
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:100%; height:100%; overflow:hidden; background:#000;
+    font-family:'Courier New', ui-monospace, monospace; user-select:none; }
+  canvas { image-rendering:pixelated; image-rendering:crisp-edges; }
+  #game { position:fixed; inset:0; width:100%; height:100%; display:block; }
 
+  /* ============ 閫氱敤 MC 鎸夐挳 ============ */
+  .mc-btn {
+    display:block; width:320px; max-width:80vw; padding:12px 16px;
+    margin:10px auto; text-align:center; color:#fff; font-size:18px; font-weight:bold;
+    letter-spacing:1px; cursor:pointer; text-shadow:2px 2px 0 rgba(0,0,0,.6);
+    background:linear-gradient(#8f8f8f,#6f6f6f);
+    border:2px solid #222; box-shadow:inset 2px 2px 0 rgba(255,255,255,.35), inset -2px -2px 0 rgba(0,0,0,.35);
+  }
+  .mc-btn:hover { background:linear-gradient(#9aa86b,#7a8a4f); }
+  .mc-btn:active { box-shadow:inset 2px 2px 0 rgba(0,0,0,.35); }
+
+  /* ============ 閬僵灞� ============ */
+  .overlay { position:fixed; inset:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; z-index:20; }
+  .hidden { display:none !important; }
+
+  /* ============ 涓昏彍鍗� ============ */
+  #menu-bg { position:fixed; inset:0; width:100%; height:100%; z-index:1; }
+  #main-menu { z-index:5; background:rgba(0,0,0,.25); }
+  .title {
+    font-size:clamp(36px,7vw,64px); font-weight:900; letter-spacing:2px;
+    color:#e8e8e8; text-shadow:3px 3px 0 #3f3f3f, 6px 6px 0 rgba(0,0,0,.35);
+    margin-bottom:6px;
+  }
+  .title .mc-green { color:#66cc33; }
+  .subtitle { color:#ddd; font-size:14px; margin-bottom:28px; text-shadow:1px 1px 0 #000; }
+  .menu-panel { text-align:center; padding:24px; }
+
+  /* ============ 鏆傚仠 / 璁剧疆 ============ */
+  #pause-menu, #settings-menu { background:rgba(20,20,20,.72); backdrop-filter:blur(2px); }
+  .panel-title { color:#fff; font-size:26px; font-weight:bold; text-shadow:2px 2px 0 #000; margin-bottom:18px; }
+  .setting-row { display:flex; align-items:center; justify-content:space-between;
+    width:320px; max-width:80vw; color:#fff; font-size:16px; margin:12px 0; text-shadow:1px 1px 0 #000; }
+  .setting-row label { cursor:pointer; }
+  .switch { width:64px; height:28px; background:#444; border:2px solid #222; position:relative; cursor:pointer; }
+  .switch::after { content:''; position:absolute; top:2px; left:2px; width:24px; height:20px; background:#bbb; }
+  .switch.on { background:#5a7a3a; }
+  .switch.on::after { left:36px; background:#8f8; }
+
+  /* ============ 娓告垙鍐� HUD ============ */
+  #hud { position:fixed; inset:0; z-index:10; pointer-events:none; }
+  #crosshair { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+    color:#fff; font-size:22px; text-shadow:1px 1px 0 #000; opacity:.85; }
+
+  /* 鐗╁搧鏍忥紙鐑敭鏍忥級 */
+  #hotbar { position:absolute; bottom:12px; left:50%; transform:translateX(-50%);
+    display:flex; gap:4px; pointer-events:auto; }
+  .slot {
+    width:42px; height:42px; background:rgba(30,30,30,.65); border:2px solid #555;
+    position:relative; display:flex; align-items:center; justify-content:center;
+    box-shadow:inset 2px 2px 0 rgba(255,255,255,.12);
+  }
+  .slot.selected { border-color:#fff; background:rgba(80,80,80,.7); }
+  .slot canvas { width:32px; height:32px; }
+  .slot .count { position:absolute; right:2px; bottom:0; color:#fff; font-size:13px; font-weight:bold; text-shadow:1px 1px 0 #000; }
+  .slot .label-tip { position:absolute; top:-24px; left:50%; transform:translateX(-50%);
+    color:#fff; font-size:12px; background:rgba(0,0,0,.7); padding:2px 6px; white-space:nowrap; }
+
+  /* ============ 鑳屽寘 / 鍚堟垚鐣岄潰 ============ */
+  #inventory { position:fixed; inset:0; z-index:15; background:rgba(0,0,0,.55);
+    display:flex; align-items:center; justify-content:center; pointer-events:auto; }
+  .inv-panel { background:#c6c6c6; border:3px solid #222; padding:16px; color:#222;
+    box-shadow:inset 2px 2px 0 rgba(255,255,255,.4), inset -2px -2px 0 rgba(0,0,0,.3); }
+  .inv-title { font-weight:bold; margin-bottom:12px; font-size:16px; }
+  .inv-grid { display:grid; gap:4px; }
+  .inv-grid .slot { width:46px; height:46px; background:#8f8f8f; }
+  .craft-area { display:flex; gap:24px; align-items:center; margin:12px 0; }
+  .arrow { font-size:28px; font-weight:bold; }
+  .inv-tip { font-size:12px; color:#333; margin-top:8px; }
+
+  /* ============ 鍏ㄥ睆鎸夐挳 ============ */
+  #fs-btn { position:fixed; right:14px; bottom:14px; z-index:30; width:44px; height:44px;
+    background:rgba(40,40,40,.7); border:2px solid #777; cursor:pointer; color:#fff;
+    display:flex; align-items:center; justify-content:center; }
+  #fs-btn:hover { background:rgba(70,90,50,.8); }
+  #fs-btn svg { width:24px; height:24px; fill:#fff; }
+
+  /* 鎻愮ず toast */
+  #toast { position:fixed; top:18px; left:50%; transform:translateX(-50%); z-index:40;
+    color:#fff; background:rgba(0,0,0,.7); padding:8px 16px; font-size:15px; text-shadow:1px 1px 0 #000; }
+
+  .help { color:#bbb; font-size:13px; margin-top:18px; line-height:1.8; text-shadow:1px 1px 0 #000; text-align:center; }
+</style>
+</head>
+<body>
+
+<canvas id="menu-bg"></canvas>
+<canvas id="game"></canvas>
+
+<!-- 涓昏彍鍗� -->
+<div id="main-menu" class="overlay">
+  <div class="menu-panel">
+    <div class="title">MINECRAFT <span class="mc-green">2D</span></div>
+    <div class="subtitle">鏂瑰潡 路 鐢熷瓨 路 寤洪€狅紙缃戦〉婕旂ず鐗堬級</div>
+    <button class="mc-btn" id="btn-start">寮€濮嬫父鎴�</button>
+    <button class="mc-btn" id="btn-menu-settings">璁剧疆</button>
+    <div class="help">A/D 绉诲姩 路 绌烘牸璺宠穬 路 榧犳爣宸﹂敭鎸栨帢 路 鍙抽敭鏀剧疆<br>E 鑳屽寘 路 Esc 鑿滃崟 路 1-0 鍒囨崲鐗╁搧鏍�</div>
+  </div>
+</div>
+
+<!-- 鏆傚仠鑿滃崟 -->
+<div id="pause-menu" class="overlay hidden">
+  <div class="panel-title">娓告垙鑿滃崟</div>
+  <button class="mc-btn" id="btn-resume">缁х画娓告垙</button>
+  <button class="mc-btn" id="btn-pause-settings">璁剧疆</button>
+  <button class="mc-btn" id="btn-exit">閫€鍑哄埌涓昏彍鍗�</button>
+</div>
+
+<!-- 璁剧疆鑿滃崟 -->
+<div id="settings-menu" class="overlay hidden">
+  <div class="panel-title">璁剧疆</div>
+  <div class="setting-row"><label>闊虫晥</label><div class="switch on" id="sw-sound"></div></div>
+  <div class="setting-row"><label>鏄剧ず鍑嗘槦</label><div class="switch on" id="sw-crosshair"></div></div>
+  <div class="setting-row"><label>娓叉煋璺濈</label><div class="switch on" id="sw-renderdist"></div></div>
+  <button class="mc-btn" id="btn-settings-back">杩斿洖</button>
+</div>
+
+<!-- 鑳屽寘 / 鍚堟垚 -->
+<div id="inventory" class="hidden">
+  <div class="inv-panel">
+    <div class="inv-title" id="inv-title">鐜╁鑳屽寘</div>
+    <div class="craft-area">
+      <div>
+        <div class="inv-grid" id="craft-grid"></div>
+      </div>
+      <div class="arrow">鉃�</div>
+      <div>
+        <div class="inv-grid" id="craft-result" style="grid-template-columns:repeat(1,46px)"></div>
+      </div>
+    </div>
+    <div class="inv-title">鐗╁搧鏍�</div>
+    <div class="inv-grid" id="inv-grid"></div>
+    <div class="inv-tip">鎻愮ず锛氬湪宸ヤ綔鍙帮紙3脳3锛夋梺鎵撳紑鑳屽寘鍙繘琛岄珮绾у悎鎴愩€�</div>
+  </div>
+</div>
+
+<!-- HUD -->
+<div id="hud" class="hidden">
+  <div id="crosshair">+</div>
+  <div id="hotbar"></div>
+</div>
+
+<!-- 鍏ㄥ睆鎸夐挳 -->
+<button id="fs-btn" title="鍏ㄥ睆">
+  <svg viewBox="0 0 24 24"><path d="M4 4h6v2H6v4H4V4zm10 0h6v6h-2V6h-4V4zM4 14h2v4h4v2H4v-6zm14 0h2v6h-6v-2h4v-4z"/></svg>
+</button>
+
+<div id="toast" class="hidden"></div>
+
+<script>
+'use strict';
+/* ================================================================
+ * 2D 鎴戠殑涓栫晫 鈥斺€� 鍗曟枃浠� Canvas 灏忔父鎴�
+ * 璐村浘鍏ㄩ儴鍦ㄨ繍琛屾椂鐢ㄧ▼搴忕粯鍒朵负 16x16锛屾棤闇€澶栭儴绱犳潗
+ * ================================================================ */
+
+/* ---------------- 鍩虹閰嶇疆 ---------------- */
+const TILE = 16;                 // 鏂瑰潡 / 璐村浘閫昏緫灏哄 16px
+let SCALE = 3;                   // 灞忓箷缂╂斁锛�1 绾圭悊鍍忕礌 = SCALE 灞忓箷鍍忕礌锛�
+const VIEW = { w: 0, h: 0 };
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const menuCanvas = document.getElementById('menu-bg');
+const mctx = menuCanvas.getContext('2d');
+
+function resize() {
+  VIEW.w = window.innerWidth; VIEW.h = window.innerHeight;
+  for (const c of [canvas, menuCanvas]) { c.width = VIEW.w; c.height = VIEW.h; }
+}
+window.addEventListener('resize', resize); resize();
+
+/* ---------------- 鏂瑰潡 / 鐗╁搧 ID ---------------- */
+const B = {
+  AIR: 0, GRASS: 1, DIRT: 2, STONE: 3, LOG: 4, LEAVES: 5, PLANK: 6,
+  COBBLE: 7, WATER: 8, FLOWER_R: 9, FLOWER_Y: 10, TUFT: 11, TABLE: 12,
+  SAND: 13,
+  STICK: 20, WOOD_PICK: 21, STONE_PICK: 22, WOOD_SWORD: 23, STONE_SWORD: 24
+};
+
+const META = {
+  [B.GRASS]:    { name: '鑽夋柟鍧�', solid: true,  hardness: 0.9, drop: B.DIRT },
+  [B.DIRT]:     { name: '娉ュ湡',   solid: true,  hardness: 0.7, drop: B.DIRT },
+  [B.STONE]:    { name: '鐭冲ご',   solid: true,  hardness: 2.5, drop: B.COBBLE, tool: 'pick' },
+  [B.LOG]:      { name: '鍘熸湪',   solid: true,  hardness: 1.2, drop: B.LOG },
+  [B.LEAVES]:   { name: '鏍戝彾',   solid: false, hardness: 0.2, drop: null },
+  [B.PLANK]:    { name: '鏈ㄦ澘',   solid: true,  hardness: 1.5, drop: B.PLANK },
+  [B.COBBLE]:   { name: '鍦嗙煶',   solid: true,  hardness: 2.0, drop: B.COBBLE, tool: 'pick' },
+  [B.WATER]:    { name: '姘�',     solid: false, liquid: true, hardness: Infinity },
+  [B.FLOWER_R]: { name: '绾㈣姳',   solid: false, hardness: 0.1, drop: B.FLOWER_R },
+  [B.FLOWER_Y]: { name: '榛勮姳',   solid: false, hardness: 0.1, drop: B.FLOWER_Y },
+  [B.TUFT]:     { name: '鑽変笡',   solid: false, hardness: 0.05, drop: B.TUFT },
+  [B.TABLE]:    { name: '宸ヤ綔鍙�', solid: true,  hardness: 1.5, drop: B.TABLE },
+  [B.SAND]:     { name: '娌欏瓙',   solid: true,  hardness: 0.8, drop: B.SAND },
+  [B.STICK]:    { name: '鏈ㄦ',   item: true },
+  [B.WOOD_PICK]:{ name: '鏈ㄩ晲',   item: true, tool: 'pick', tier: 1 },
+  [B.STONE_PICK]:{name: '鐭抽晲',   item: true, tool: 'pick', tier: 2 },
+  [B.WOOD_SWORD]:{name: '鏈ㄥ墤',   item: true, tool: 'sword' },
+  [B.STONE_SWORD]:{name:'鐭冲墤',   item: true, tool: 'sword' }
+};
+const isBlock = id => META[id] && !META[id].item;
+
+/* ---------------- 闅忔満鏁板伐鍏� ---------------- */
+function rng(seed) { let s = seed >>> 0; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
+function hash1(n) { const x = Math.sin(n * 127.1) * 43758.5453; return x - Math.floor(x); }
+function noise(g, r, base, dark, light, n) {
+  for (let i = 0; i < n; i++) {
+    g.fillStyle = r() > 0.5 ? dark : light;
+    g.fillRect(Math.floor(r() * 16), Math.floor(r() * 16), 1, 1);
+  }
+  g.fillStyle = base;
+}
+
+/* ---------------- 16x16 绋嬪簭鍖栬创鍥� ---------------- */
+const TEX = {};
+function makeTex(seed, fn) {
+  const c = document.createElement('canvas'); c.width = 16; c.height = 16;
+  const g = c.getContext('2d'); fn(g, rng(seed)); return c;
+}
+
+function buildTextures() {
+  TEX[B.DIRT] = makeTex(11, g => {
+    g.fillStyle = '#866043'; g.fillRect(0, 0, 16, 16);
+    const r = rng(12); noise(g, r, '#866043', '#755136', '#96704f', 46);
+  });
+  TEX[B.GRASS] = makeTex(21, g => {
+    g.fillStyle = '#866043'; g.fillRect(0, 0, 16, 16);
+    const r = rng(22); noise(g, r, '#866043', '#755136', '#96704f', 30);
+    g.fillStyle = '#5fb33a'; g.fillRect(0, 0, 16, 4);
+    noise(g, r, '#5fb33a', '#4d9c2e', '#74c84b', 26);
+    for (let x = 0; x < 16; x++) { if (r() > 0.5) g.fillStyle = '#5fb33a', g.fillRect(x, 4, 1, 1 + Math.floor(r() * 2)); }
+  });
+  TEX[B.STONE] = makeTex(31, g => {
+    g.fillStyle = '#7d7d7d'; g.fillRect(0, 0, 16, 16);
+    const r = rng(32); noise(g, r, '#7d7d7d', '#6b6b6b', '#8f8f8f', 40);
+    g.strokeStyle = '#5e5e5e';
+    for (let i = 0; i < 4; i++) { g.beginPath(); g.moveTo(r()*16, r()*16); g.lineTo(r()*16, r()*16); g.stroke(); }
+  });
+  TEX[B.LOG] = makeTex(41, g => {
+    g.fillStyle = '#6b5231'; g.fillRect(0, 0, 16, 16);
+    const r = rng(42);
+    for (let x = 0; x < 16; x += 2) { g.fillStyle = r() > 0.5 ? '#5d4528' : '#7a5f3a'; g.fillRect(x, 0, 1, 16); }
+    noise(g, r, '#6b5231', '#4e3a21', '#87693f', 18);
+  });
+  TEX['log-top'] = makeTex(43, g => {
+    g.fillStyle = '#8a6d42'; g.fillRect(0, 0, 16, 16);
+    g.strokeStyle = '#5d4528';
+    for (let k = 2; k < 8; k += 2) { g.strokeRect(k, k, 16 - k * 2, 16 - k * 2); }
+  });
+  TEX[B.LEAVES] = makeTex(51, g => {
+    const r = rng(52);
+    g.clearRect(0, 0, 16, 16);
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+      if (r() > 0.18) { g.fillStyle = r() > 0.5 ? '#3f8a2a' : '#4fa035'; g.fillRect(x, y, 1, 1); }
+    }
+  });
+  TEX[B.PLANK] = makeTex(61, g => {
+    g.fillStyle = '#9c7a4a'; g.fillRect(0, 0, 16, 16);
+    const r = rng(62); noise(g, r, '#9c7a4a', '#8a6a3e', '#ab8a58', 22);
+    g.fillStyle = '#6e5330';
+    for (let y = 4; y < 16; y += 4) g.fillRect(0, y, 16, 1);
+  });
+  TEX[B.COBBLE] = makeTex(71, g => {
+    g.fillStyle = '#828282'; g.fillRect(0, 0, 16, 16);
+    const r = rng(72);
+    for (let i = 0; i < 7; i++) {
+      g.fillStyle = r() > 0.5 ? '#909090' : '#6e6e6e';
+      g.fillRect(Math.floor(r()*13), Math.floor(r()*13), 3 + Math.floor(r()*3), 3 + Math.floor(r()*3));
+    }
+    g.strokeStyle = '#545454';
+    for (let i = 0; i < 5; i++) { g.beginPath(); g.moveTo(r()*16, r()*16); g.lineTo(r()*16, r()*16); g.stroke(); }
+  });
+  TEX[B.WATER] = makeTex(81, g => {
+    g.clearRect(0, 0, 16, 16); g.fillStyle = 'rgba(63,110,240,0.72)'; g.fillRect(0, 0, 16, 16);
+    const r = rng(82); g.fillStyle = 'rgba(120,170,255,0.55)';
+    for (let i = 0; i < 5; i++) g.fillRect(Math.floor(r()*14), Math.floor(r()*16), 3, 1);
+  });
+  TEX[B.FLOWER_R] = makeTex(91, g => {
+    g.clearRect(0, 0, 16, 16); g.fillStyle = '#3f8a2a'; g.fillRect(7, 7, 2, 9);
+    g.fillStyle = '#d83a3a';
+    [[6,3],[9,3],[5,5],[10,5],[6,7],[9,7],[7,4],[8,6]].forEach(p=>g.fillRect(p[0],p[1],1,1));
+    g.fillStyle = '#f2d24a'; g.fillRect(7, 5, 2, 2);
+  });
+  TEX[B.FLOWER_Y] = makeTex(92, g => {
+    g.clearRect(0, 0, 16, 16); g.fillStyle = '#3f8a2a'; g.fillRect(7, 7, 2, 9);
+    g.fillStyle = '#f2c531';
+    [[6,3],[9,3],[5,5],[10,5],[6,7],[9,7],[7,4],[8,6]].forEach(p=>g.fillRect(p[0],p[1],1,1));
+    g.fillStyle = '#a8791f'; g.fillRect(7, 5, 2, 2);
+  });
+  TEX[B.TUFT] = makeTex(93, g => {
+    g.clearRect(0, 0, 16, 16); g.fillStyle = '#4d9c2e';
+    for (let x = 2; x < 15; x += 3) { const h = 5 + Math.floor(hash1(x)*5); g.fillRect(x, 15 - h, 1, h); }
+  });
+  TEX[B.TABLE] = makeTex(101, g => {
+    g.fillStyle = '#9c7a4a'; g.fillRect(0, 0, 16, 16);
+    g.fillStyle = '#6e5330'; g.fillRect(0, 0, 16, 3); g.fillRect(0, 13, 16, 3);
+    g.fillRect(0, 0, 3, 16); g.fillRect(13, 0, 3, 16);
+    g.fillStyle = '#c9a86a'; g.fillRect(4, 4, 8, 8);
+    g.strokeStyle = '#5d4528'; g.strokeRect(4.5, 4.5, 7, 7);
+    g.beginPath(); g.moveTo(4, 12); g.lineTo(12, 4); g.stroke();
+  });
+  TEX[B.SAND] = makeTex(111, g => {
+    g.fillStyle = '#dcd39a'; g.fillRect(0, 0, 16, 16);
+    const r = rng(112); noise(g, r, '#dcd39a', '#c9bf85', '#ece3ab', 30);
+  });
+  /* 鐗╁搧鍥炬爣 */
+  TEX[B.STICK] = makeTex(121, g => {
+    g.clearRect(0, 0, 16, 16); g.strokeStyle = '#7a5f3a'; g.lineWidth = 2;
+    g.beginPath(); g.moveTo(4, 13); g.lineTo(12, 5); g.stroke();
+  });
+  TEX[B.WOOD_PICK] = makeTex(122, g => drawPick(g, '#9c7a4a'));
+  TEX[B.STONE_PICK] = makeTex(123, g => drawPick(g, '#828282'));
+  TEX[B.WOOD_SWORD] = makeTex(124, g => drawSword(g, '#9c7a4a'));
+  TEX[B.STONE_SWORD] = makeTex(125, g => drawSword(g, '#828282'));
+}
+function drawPick(g, head) {
+  g.clearRect(0, 0, 16, 16);
+  g.strokeStyle = '#6b5231'; g.lineWidth = 2;
+  g.beginPath(); g.moveTo(5, 13); g.lineTo(11, 5); g.stroke();
+  g.strokeStyle = head; g.lineWidth = 2;
+  g.beginPath(); g.moveTo(3, 5); g.lineTo(13, 5); g.moveTo(3, 5); g.lineTo(5, 7); g.moveTo(13, 5); g.lineTo(11, 7); g.stroke();
+}
+function drawSword(g, blade) {
+  g.clearRect(0, 0, 16, 16);
+  g.strokeStyle = blade; g.lineWidth = 2;
+  g.beginPath(); g.moveTo(5, 13); g.lineTo(11, 4); g.stroke();
+  g.strokeStyle = '#6b5231'; g.lineWidth = 2;
+  g.beginPath(); g.moveTo(3, 11); g.lineTo(7, 13); g.stroke();
+}
+buildTextures();
+
+/* ---------------- 涓栫晫锛堟棤闄愬钩鍧︼紝鎸夊垪鎸夐渶鐢熸垚锛� ---------------- */
+const SURFACE = 20;                 // 鑽夌毊鎵€鍦ㄧ殑 tile 琛�
+const world = new Map();
+const key = (x, y) => x + ',' + y;
+function getBlock(x, y) { return world.get(key(x, y)) ?? B.AIR; }
+function setBlock(x, y, id) { if (id === B.AIR) world.delete(key(x, y)); else world.set(key(x, y), id); }
+
+function ensureColumn(x) {
+  if (world.has('col' + x)) return;
+  world.set('col' + x, 1);
+  const r = hash1(x);
+  const pool = r > 0.885;
+  for (let y = SURFACE; y < SURFACE + 40; y++) {
+    if (y === SURFACE) setBlock(x, y, pool ? B.AIR : B.GRASS);
+    else if (y < SURFACE + 4) setBlock(x, y, B.DIRT);
+    else setBlock(x, y, B.STONE);
+  }
+  if (pool) { for (let y = SURFACE; y < SURFACE + 3; y++) setBlock(x, y, B.WATER); }
+  const rf = hash1(x * 3.71);
+  if (!pool) {
+    if (rf > 0.93) setBlock(x, SURFACE - 1, B.FLOWER_R);
+    else if (rf > 0.86) setBlock(x, SURFACE - 1, B.FLOWER_Y);
+    else if (rf > 0.6) setBlock(x, SURFACE - 1, B.TUFT);
+  }
+  const rt = hash1(x * 0.913);
+  if (rt > 0.965 && !pool) {
+    const h = 4 + Math.floor(hash1(x * 2.3) * 2);
+    for (let i = 1; i <= h; i++) setBlock(x, SURFACE - i, B.LOG);
+    for (let dx = -2; dx <= 2; dx++) for (let dy = h - 2; dy <= h; dy++) {
+      if (Math.abs(dx) === 2 && dy === h) continue;
+      const yy = SURFACE - dy;
+      if (getBlock(x + dx, yy) === B.AIR) setBlock(x + dx, yy, B.LEAVES);
+    }
+    setBlock(x, SURFACE - h - 1, B.LEAVES);
+  }
+}
+
+/* ---------------- 闊虫晥锛圵ebAudio 绋嬪簭鍚堟垚锛岄渶鐢ㄦ埛鎵嬪娍鍚庡惎鍔級 ---------------- */
+let audioCtx = null;
+const settings = { sound: true, crosshair: true, far: true };
+function ac() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+function beep(freq, dur, type, vol) {
+  if (!settings.sound) return;
+  try {
+    const c = ac(), o = c.createOscillator(), g = c.createGain();
+    o.type = type || 'square'; o.frequency.value = freq;
+    g.gain.setValueAtTime(vol || 0.12, c.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + dur);
+    o.connect(g); g.connect(c.destination); o.start(); o.stop(c.currentTime + dur);
+  } catch (e) { /* 蹇界暐闊抽閿欒 */ }
+}
+const sfx = {
+  break:   () => beep(120, 0.12, 'triangle', 0.2),
+  place:   () => beep(220, 0.06, 'square', 0.12),
+  pickup:  () => beep(520, 0.08, 'sine', 0.12),
+  swing:   () => beep(300, 0.05, 'sawtooth', 0.06),
+  craft:   () => beep(440, 0.1, 'sine', 0.14)
+};
+
+/* ---------------- 鍏ㄥ眬鐘舵€� ---------------- */
+const state = { screen: 'menu', paused: false, inventoryOpen: false, nearTable: false };
+const player = {
+  x: 0, y: SURFACE * TILE - 23, vx: 0, vy: 0, w: 11, h: 23,
+  onGround: false, facing: 1, walk: 0, attack: 0, armAngle: 0, inWater: false
+};
+const hotbar = new Array(10).fill(null);
+const mainInv = new Array(20).fill(null);
+let carried = null;
+let craftGrid = new Array(9).fill(null);
+let craftResult = null;
+let drops = [];
+let particles = [];
+let mining = { key: null, x: 0, y: 0, progress: 0 };
+let cam = { x: 0, y: SURFACE * TILE * SCALE - VIEW.h * 0.55 };
+let mouse = { x: 0, y: 0, left: false, right: false };
+
+/* ---------------- 杈撳叆 ---------------- */
+const keys = {};
+let selected = 0;
+
+window.addEventListener('keydown', e => {
+  if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
+  keys[e.code] = true;
+  if (e.code === 'Escape') { onEsc(); return; }
+  if (state.screen === 'play' && !state.paused) {
+    if (e.code === 'KeyE') toggleInventory();
+    if (/^Digit[0-9]$/.test(e.code)) { const n = +e.code.slice(5); selectSlot(n === 0 ? 9 : n - 1); }
+  }
+});
+window.addEventListener('keyup', e => keys[e.code] = false);
+canvas.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
+canvas.addEventListener('mousedown', e => {
+  if (state.screen !== 'play' || state.paused || state.inventoryOpen) return;
+  if (e.button === 0) { mouse.left = true; tryBreakSwing(); }
+  if (e.button === 2) placeBlock();
+});
+window.addEventListener('mouseup', e => { if (e.button === 0) mouse.left = false; if (e.button === 2) mouse.right = false; });
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+canvas.addEventListener('wheel', e => {
+  if (state.screen !== 'play' || state.inventoryOpen) return;
+  selected = (selected + (e.deltaY > 0 ? 1 : -1) + 10) % 10; renderHotbar();
+});
+
+function selectSlot(i) { selected = i; renderHotbar(); }
+function heldItem() { return hotbar[selected]; }
+
+/* ---------------- 鐗╃悊 ---------------- */
+const GRAV = 0.012, JUMP = 0.32, SPEED = 0.16;
+function solidAt(tx, ty) { const m = META[getBlock(tx, ty)]; return m && m.solid; }
+
+function updatePlayer(dt) {
+  let ax = 0;
+  if (keys.KeyA || keys.ArrowLeft) ax -= 1;
+  if (keys.KeyD || keys.ArrowRight) ax += 1;
+  player.vx = ax * SPEED;
+  if (ax !== 0) player.facing = ax;
+
+  const cx = Math.floor((player.x + player.w / 2) / TILE);
+  const cy = Math.floor((player.y + player.h / 2) / TILE);
+  player.inWater = !!(META[getBlock(cx, cy)] && META[getBlock(cx, cy)].liquid);
+
+  const jump = keys.Space || keys.ArrowUp;
+  if (jump && player.onGround) { player.vy = -JUMP; player.onGround = false; }
+  if (player.inWater) { player.vy += GRAV * 0.35; if (jump) player.vy = -0.18; }
+  else player.vy += GRAV;
+  if (player.vy > 0.4) player.vy = 0.4;
+
+  player.x += player.vx * dt; collideX();
+  player.y += player.vy * dt; collideY();
+
+  if (Math.abs(player.vx) > 0.01 && player.onGround) player.walk += dt * 0.012; else player.walk = 0;
+  if (player.attack > 0) player.attack -= dt * 0.006;
+
+  const wx = (cam.x + mouse.x) / SCALE, wy = (cam.y + mouse.y) / SCALE;
+  player.armAngle = Math.atan2(wy - (player.y + 8), wx - (player.x + player.w / 2));
+}
+
+function collideX() {
+  const top = Math.floor(player.y / TILE), bot = Math.floor((player.y + player.h - 1) / TILE);
+  if (player.vx > 0) { const tx = Math.floor((player.x + player.w) / TILE); for (let ty = top; ty <= bot; ty++) if (solidAt(tx, ty)) { player.x = tx * TILE - player.w - 0.01; player.vx = 0; break; } }
+  else if (player.vx < 0) { const tx = Math.floor(player.x / TILE); for (let ty = top; ty <= bot; ty++) if (solidAt(tx, ty)) { player.x = (tx + 1) * TILE + 0.01; player.vx = 0; break; } }
+}
+function collideY() {
+  const left = Math.floor(player.x / TILE), right = Math.floor((player.x + player.w - 1) / TILE);
+  if (player.vy > 0) { const ty = Math.floor((player.y + player.h) / TILE); for (let tx = left; tx <= right; tx++) if (solidAt(tx, ty)) { player.y = ty * TILE - player.h - 0.01; player.vy = 0; player.onGround = true; break; } }
+  else if (player.vy < 0) { const ty = Math.floor(player.y / TILE); for (let tx = left; tx <= right; tx++) if (solidAt(tx, ty)) { player.y = (ty + 1) * TILE + 0.01; player.vy = 0; break; } }
+}
+
+/* ---------------- 鎸栨帢 / 鏀剧疆 ---------------- */
+function mouseTile() {
+  const wx = (cam.x + mouse.x) / SCALE, wy = (cam.y + mouse.y) / SCALE;
+  return { tx: Math.floor(wx / TILE), ty: Math.floor(wy / TILE) };
+}
+
+function tryBreakSwing() { player.attack = 0.5; sfx.swing(); }
+
+function updateMining(dt) {
+  if (!mouse.left) { mining.key = null; mining.progress = 0; return; }
+  const { tx, ty } = mouseTile();
+  const id = getBlock(tx, ty), m = META[id];
+  if (!m || m.item || m.liquid || m.hardness === Infinity) { mining.key = null; mining.progress = 0; return; }
+  const px = player.x + player.w / 2, py = player.y + player.h / 2;
+  if (Math.hypot(tx * TILE + 8 - px, ty * TILE + 8 - py) > TILE * 5) { mining.key = null; mining.progress = 0; return; }
+  const k = key(tx, ty);
+  if (mining.key !== k) { mining.key = k; mining.x = tx; mining.y = ty; mining.progress = 0; }
+  const held = heldItem();
+  let speed = 1;
+  if (m.tool && held && META[held.id] && META[held.id].tool === m.tool) speed = 1.6 + (META[held.id].tier || 0) * 0.5;
+  mining.progress += dt * 0.001 * speed / m.hardness;
+  if (mining.progress >= 1) { breakBlock(tx, ty); mining.key = null; mining.progress = 0; }
+}
+
+function breakBlock(tx, ty) {
+  const id = getBlock(tx, ty), m = META[id]; if (!m) return;
+  setBlock(tx, ty, B.AIR);
+  spawnParticles(tx * TILE + 8, ty * TILE + 8, id);
+  if (m.drop != null) spawnDrop(tx, ty, m.drop, 1);
+  sfx.break();
+}
+
+function placeBlock() {
+  const { tx, ty } = mouseTile();
+  const id = getBlock(tx, ty);
+  if (id !== B.AIR && !(META[id] && META[id].solid === false)) return;
+  const slot = hotbar[selected]; if (!slot || !isBlock(slot.id)) return;
+  const bx = tx * TILE, by = ty * TILE;
+  if (bx < player.x + player.w && bx + TILE > player.x && by < player.y + player.h && by + TILE > player.y) return;
+  setBlock(tx, ty, slot.id);
+  if (--slot.count <= 0) hotbar[selected] = null;
+  sfx.place(); renderHotbar();
+}
+
+/* ---------------- 鎺夎惤鐗� / 绮掑瓙 ---------------- */
+function spawnDrop(tx, ty, id, count) {
+  drops.push({ x: tx * TILE + 8, y: ty * TILE + 8, vx: (hash1(tx * 7 + ty) - 0.5) * 0.1, vy: -0.15, id, count, bob: 0 });
+}
+function updateDrops(dt) {
+  for (const d of drops) {
+    d.vy += GRAV; d.y += d.vy * dt; d.x += d.vx * dt;
+    const tx = Math.floor(d.x / TILE), ty = Math.floor(d.y / TILE);
+    if (solidAt(tx, ty)) { d.y = ty * TILE - 8; d.vy = 0; d.vx *= 0.8; }
+    d.bob += dt * 0.004;
+    const px = player.x + player.w / 2, py = player.y + player.h / 2;
+    if (Math.hypot(d.x - px, d.y - py) < TILE * 1.4) { addToInventory(d.id, d.count); d.dead = true; sfx.pickup(); }
+  }
+  drops = drops.filter(d => !d.dead);
+}
+
+function spawnParticles(x, y, blockId) {
+  for (let i = 0; i < 8; i++) particles.push({ x, y, vx: (Math.random() - 0.5) * 0.1, vy: -Math.random() * 0.12, life: 30, blockId });
+}
+function updateParticles(dt) {
+  for (const p of particles) { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += GRAV * 0.5; p.life -= dt * 0.006; }
+  particles = particles.filter(p => p.life > 0);
+}
+
+/* ---------------- 鑳屽寘 ---------------- */
+function addToInventory(id, count) {
+  const pools = [hotbar, mainInv];
+  for (const pool of pools) for (const s of pool) {
+    if (s && s.id === id) { const add = Math.min(count, 64 - s.count); s.count += add; count -= add; if (count <= 0) { renderHotbar(); return; } }
+  }
+  for (const pool of pools) for (let i = 0; i < pool.length; i++) {
+    if (!pool[i]) { const add = Math.min(count, 64); pool[i] = { id, count: add }; count -= add; if (count <= 0) { renderHotbar(); return; } }
+  }
+}
+
+/* ---------------- 鍚堟垚閰嶆柟锛堟棤搴忓尮閰嶏級 ---------------- */
+const RECIPES = [
+  { grid: 2, out: { id: B.PLANK, count: 4 }, need: [[B.LOG, 1]] },
+  { grid: 2, out: { id: B.STICK, count: 4 }, need: [[B.PLANK, 2]] },
+  { grid: 2, out: { id: B.TABLE, count: 1 }, need: [[B.PLANK, 4]] },
+  { grid: 3, out: { id: B.WOOD_PICK, count: 1 }, need: [[B.PLANK, 3], [B.STICK, 2]] },
+  { grid: 3, out: { id: B.STONE_PICK, count: 1 }, need: [[B.COBBLE, 3], [B.STICK, 2]] },
+  { grid: 3, out: { id: B.WOOD_SWORD, count: 1 }, need: [[B.PLANK, 2], [B.STICK, 1]] },
+  { grid: 3, out: { id: B.STONE_SWORD, count: 1 }, need: [[B.COBBLE, 2], [B.STICK, 1]] }
+];
+function matchRecipe(grid, size) {
+  const counts = {};
+  for (const s of grid) if (s) counts[s.id] = (counts[s.id] || 0) + s.count;
+  for (const r of RECIPES) {
+    if (r.grid > size) continue;
+    let ok = true;
+    for (const [id, n] of r.need) if ((counts[id] || 0) !== n) { ok = false; break; }
+    if (ok && Object.keys(counts).length === r.need.length) return r;
+  }
+  return null;
+}
+
+/* ---------------- 娓叉煋 ---------------- */
+const PART_COLOR = { 1: '#5fb33a', 2: '#866043', 3: '#7d7d7d', 4: '#6b5231', 5: '#3f8a2a', 6: '#9c7a4a', 7: '#828282', 11: '#4d9c2e', 12: '#9c7a4a' };
+
+function drawSky(g) {
+  const grd = g.createLinearGradient(0, 0, 0, VIEW.h);
+  grd.addColorStop(0, '#6fa3e8'); grd.addColorStop(1, '#cfe8ff');
+  g.fillStyle = grd; g.fillRect(0, 0, VIEW.w, VIEW.h);
+  g.fillStyle = 'rgba(255,255,220,.95)'; g.fillRect(VIEW.w * 0.82, 56, 42, 42);
+  g.fillStyle = 'rgba(255,255,255,.7)';
+  g.fillRect(VIEW.w * 0.15, 70, 70, 18); g.fillRect(VIEW.w * 0.2, 58, 46, 16);
+  g.fillRect(VIEW.w * 0.55, 110, 60, 16);
+}
+
+function renderWorld(g, camX, camY) {
+  const ts = TILE * SCALE;
+  const pad = settings.far ? 3 : 0;
+  const cols = Math.ceil(VIEW.w / ts) + 2 + pad, rows = Math.ceil(VIEW.h / ts) + 2 + pad;
+  const startX = Math.floor(camX / ts), startY = Math.floor(camY / ts);
+  for (let cx = startX; cx < startX + cols; cx++) {
+    ensureColumn(cx);
+    for (let cy = startY; cy < startY + rows; cy++) {
+      const id = getBlock(cx, cy); if (id === B.AIR) continue;
+      const px = cx * ts - camX, py = cy * ts - camY;
+      const img = TEX[id]; if (!img) continue;
+      g.imageSmoothingEnabled = false;
+      g.drawImage(img, px, py, ts, ts);
+    }
+  }
+}
+
+function drawDrops(g) {
+  for (const d of drops) {
+    const px = d.x * SCALE - cam.x, py = (d.y + Math.sin(d.bob) * 2) * SCALE - cam.y;
+    const img = TEX[d.id]; if (!img) continue;
+    g.drawImage(img, px - 4 * SCALE, py - 4 * SCALE, 8 * SCALE, 8 * SCALE);
+  }
+}
+
+function drawParticles(g) {
+  for (const p of particles) {
+    g.fillStyle = PART_COLOR[p.blockId] || '#888';
+    g.fillRect(p.x * SCALE - cam.x, p.y * SCALE - cam.y, 2 * SCALE, 2 * SCALE);
+  }
+}
+
+function drawSteve(g) {
+  const s = SCALE;
+  const px = player.x * s - cam.x, py = player.y * s - cam.y;
+  const walk = player.onGround ? Math.sin(player.walk * Math.PI * 2) : 0;
+  const legOff = walk * 2 * s;
+  // 鑵�
+  g.fillStyle = '#3b3b8f';
+  g.fillRect(px + 1 * s, py + 14 * s, 4 * s, Math.max(2 * s, (9 + legOff / s) * s));
+  g.fillRect(px + 6 * s, py + 14 * s, 4 * s, Math.max(2 * s, (9 - legOff / s) * s));
+  // 韬綋
+  g.fillStyle = '#00aaaa'; g.fillRect(px + 1 * s, py + 6 * s, 9 * s, 8 * s);
+  // 鍚庤噦
+  g.fillStyle = '#b57a55'; g.fillRect(px + (player.facing < 0 ? 0 : 10) * s, py + 6 * s, 2 * s, 8 * s);
+  // 澶�
+  g.fillStyle = '#c68863'; g.fillRect(px + 2 * s, py, 8 * s, 6 * s);
+  g.fillStyle = '#5d3a1a'; g.fillRect(px + 2 * s, py, 8 * s, 1.5 * s);
+  g.fillStyle = '#fff'; g.fillRect(px + (player.facing > 0 ? 6 : 3) * s, py + 2.5 * s, 2 * s, 1.5 * s);
+  g.fillStyle = '#3f66d8'; g.fillRect(px + (player.facing > 0 ? 6.5 : 3.5) * s, py + 2.5 * s, 1 * s, 1.5 * s);
+  // 鍓嶈噦璺熼殢榧犳爣锛屾敾鍑绘椂鎸ュ姩
+  g.save();
+  g.translate(px + 5.5 * s, py + 7 * s);
+  g.rotate(player.armAngle);
+  if (player.attack > 0) g.rotate(-0.6 * Math.sin(player.attack * Math.PI));
+  g.fillStyle = '#c68863'; g.fillRect(0, -1 * s, 2 * s, 8 * s);
+  g.restore();
+}
+
+function drawCrack(g) {
+  if (!mining.key) return;
+  const ts = TILE * SCALE;
+  const px = mining.x * ts - cam.x, py = mining.y * ts - cam.y;
+  g.fillStyle = `rgba(0,0,0,${mining.progress * 0.45})`;
+  g.fillRect(px, py, ts, ts);
+  g.strokeStyle = 'rgba(0,0,0,.7)'; g.lineWidth = 1;
+  const n = Math.floor(mining.progress * 5);
+  for (let i = 0; i < n; i++) {
+    g.beginPath(); g.moveTo(px + 8 * SCALE, py + 8 * SCALE);
+    g.lineTo(px + hash1(i * 3 + mining.x) * ts, py + hash1(i * 5 + mining.y) * ts); g.stroke();
+  }
+}
+
+/* 鑿滃崟鑳屾櫙锛氱紦鎱㈠钩绉荤殑鎴戠殑涓栫晫椋庢櫙 */
+let menuCam = 0;
+function renderMenuBg() {
+  menuCam += 0.15;
+  const ts = TILE * SCALE;
+  const startX = Math.floor(menuCam / ts);
+  for (let cx = startX; cx < startX + Math.ceil(VIEW.w / ts) + 2; cx++) ensureColumn(cx);
+  const startY = Math.floor(cam.y / ts);
+  mctx.imageSmoothingEnabled = false;
+  for (let cx = startX; cx < startX + Math.ceil(VIEW.w / ts) + 2; cx++) {
+    for (let cy = startY - 4; cy < startY + Math.ceil(VIEW.h / ts); cy++) {
+      const id = getBlock(cx, cy); if (id === B.AIR) continue;
+      const img = TEX[id]; if (!img) continue;
+      mctx.drawImage(img, cx * ts - menuCam, cy * ts - cam.y, ts, ts);
+    }
+  }
+}
+
+function updateCamera() {
+  cam.x = player.x * SCALE - VIEW.w / 2;
+  cam.y = player.y * SCALE - VIEW.h / 2;
+}
+
+function ensureAround() {
+  const cx = Math.floor(player.x / TILE);
+  const r = settings.far ? 12 : 8;
+  for (let x = cx - r; x <= cx + r; x++) ensureColumn(x);
+}
+
+function checkNearTable() {
+  const cx = Math.floor(player.x / TILE), cy = Math.floor(player.y / TILE);
+  state.nearTable = false;
+  for (let dx = -2; dx <= 2 && !state.nearTable; dx++)
+    for (let dy = -2; dy <= 2; dy++)
+      if (getBlock(cx + dx, cy + dy) === B.TABLE) { state.nearTable = true; break; }
+}
+
+function render() {
+  drawSky(ctx);
+  if (state.screen === 'menu') { renderMenuBg(); return; }
+  renderWorld(ctx, cam.x, cam.y);
+  drawDrops(ctx); drawParticles(ctx); drawSteve(ctx); drawCrack(ctx);
+}
+
+/* ---------------- DOM 鐣岄潰 ---------------- */
+const $ = id => document.getElementById(id);
+function toast(msg) {
+  const t = $('toast'); t.textContent = msg; t.classList.remove('hidden');
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.add('hidden'), 2000);
+}
+
+function slotEl(slot, onClick) {
+  const d = document.createElement('div'); d.className = 'slot';
+  if (slot) {
+    const c = document.createElement('canvas'); c.width = 32; c.height = 32;
+    const g = c.getContext('2d'); g.imageSmoothingEnabled = false;
+    g.drawImage(TEX[slot.id], 0, 0, 32, 32);
+    d.appendChild(c);
+    if (slot.count > 1) { const cnt = document.createElement('div'); cnt.className = 'count'; cnt.textContent = slot.count; d.appendChild(cnt); }
+  }
+  d.onclick = onClick;
+  return d;
+}
+
+function renderHotbar() {
+  const el = $('hotbar'); el.innerHTML = '';
+  hotbar.forEach((slot, i) => el.appendChild(slotEl(slot, () => selectSlot(i))));
+}
+
+function refreshCraft() {
+  const size = state.nearTable ? 3 : 2;
+  craftResult = matchRecipe(craftGrid.slice(0, size * size), size);
+}
+
+function renderInv() {
+  const size = state.nearTable ? 3 : 2;
+  const cg = $('craft-grid');
+  cg.style.gridTemplateColumns = `repeat(${size},46px)`; cg.innerHTML = '';
+  for (let i = 0; i < size * size; i++) cg.appendChild(slotEl(craftGrid[i], () => slotClick(craftGrid, i)));
+  const res = $('craft-result'); res.innerHTML = '';
+  res.appendChild(slotEl(craftResult ? craftResult.out : null, takeResult));
+  const inv = $('inv-grid'); inv.style.gridTemplateColumns = 'repeat(10,46px)'; inv.innerHTML = '';
+  hotbar.forEach((s, i) => inv.appendChild(slotEl(s, () => slotClick(hotbar, i))));
+  mainInv.forEach((s, i) => inv.appendChild(slotEl(s, () => slotClick(mainInv, i))));
+  $('inv-title').textContent = state.nearTable ? '宸ヤ綔鍙帮紙3脳3 鍚堟垚锛�' : '鐜╁鑳屽寘锛�2脳2 鍚堟垚锛�';
+}
+
+function slotClick(pool, i) {
+  const s = pool[i];
+  if (carried) {
+    if (!s) { pool[i] = { ...carried }; carried = null; }
+    else if (s.id === carried.id) {
+      const add = Math.min(carried.count, 64 - s.count); s.count += add; carried.count -= add;
+      if (carried.count <= 0) carried = null;
+    } else { pool[i] = carried; carried = s; }
+  } else if (s) { carried = { ...s }; pool[i] = null; }
+  refreshCraft(); renderInv(); renderHotbar();
+}
+
+function takeResult() {
+  if (!craftResult) return;
+  const out = craftResult.out;
+  if (carried && (carried.id !== out.id || carried.count + out.count > 64)) return;
+  const counts = {};
+  craftGrid.forEach(s => { if (s) counts[s.id] = (counts[s.id] || 0) + s.count; });
+  for (const [id, n] of craftResult.need) counts[id] = (counts[id] || 0) - n;
+  craftGrid = craftGrid.map(s => {
+    if (!s) return null;
+    const n = counts[s.id] || 0;
+    if (n >= s.count) { counts[s.id] += s.count; return null; }
+    counts[s.id] += s.count; return { id: s.id, count: s.count - n };
+  });
+  if (carried) carried.count += out.count; else carried = { id: out.id, count: out.count };
+  sfx.craft(); refreshCraft(); renderInv(); renderHotbar();
+}
+
+function toggleInventory() {
+  state.inventoryOpen = !state.inventoryOpen;
+  if (state.inventoryOpen) {
+    craftGrid = new Array(9).fill(null); carried = null;
+    refreshCraft(); renderInv();
+    $('inventory').classList.remove('hidden'); $('hud').classList.add('hidden');
+  } else closeInventory();
+}
+function closeInventory() {
+  if (carried) { addToInventory(carried.id, carried.count); carried = null; }
+  state.inventoryOpen = false;
+  $('inventory').classList.add('hidden'); $('hud').classList.remove('hidden');
+  renderHotbar();
+}
+
+/* ---------------- 鑿滃崟 / 鐘舵€佸垏鎹� ---------------- */
+function showOverlay(which) {
+  $('main-menu').classList.toggle('hidden', which !== 'menu');
+  $('pause-menu').classList.toggle('hidden', which !== 'pause');
+  $('settings-menu').classList.toggle('hidden', which !== 'settings');
+}
+function startGame() {
+  state.screen = 'play'; state.paused = false; state.inventoryOpen = false;
+  showOverlay('none'); $('hud').classList.remove('hidden');
+  if (!hotbar[0]) hotbar[0] = { id: B.PLANK, count: 4 };
+  renderHotbar();
+  toast('A/D 绉诲姩 路 绌烘牸璺宠穬 路 宸﹂敭鎸栨帢 路 鍙抽敭鏀剧疆 路 E 鑳屽寘');
+}
+function exitToMenu() {
+  state.screen = 'menu'; state.paused = false; state.inventoryOpen = false;
+  $('hud').classList.add('hidden'); $('inventory').classList.add('hidden');
+  showOverlay('menu');
+}
+function onEsc() {
+  if (!$('settings-menu').classList.contains('hidden')) {
+    showOverlay(state.screen === 'menu' ? 'menu' : (state.paused ? 'pause' : 'none')); return;
+  }
+  if (state.screen !== 'play') return;
+  if (state.inventoryOpen) { closeInventory(); return; }
+  state.paused = !state.paused;
+  showOverlay(state.paused ? 'pause' : 'none');
+}
+
+$('btn-start').onclick = startGame;
+$('btn-menu-settings').onclick = () => showOverlay('settings');
+$('btn-resume').onclick = () => { state.paused = false; showOverlay('none'); };
+$('btn-pause-settings').onclick = () => showOverlay('settings');
+$('btn-exit').onclick = exitToMenu;
+$('btn-settings-back').onclick = () => showOverlay(state.screen === 'menu' ? 'menu' : (state.paused ? 'pause' : 'none'));
+
+function bindSwitch(id, key, onChange) {
+  const el = $(id);
+  el.onclick = () => { settings[key] = !settings[key]; el.classList.toggle('on', settings[key]); if (onChange) onChange(); };
+}
+bindSwitch('sw-sound', 'sound');
+bindSwitch('sw-crosshair', 'crosshair', () => { $('crosshair').style.display = settings.crosshair ? '' : 'none'; });
+bindSwitch('sw-renderdist', 'far');
+
+/* 鍏ㄥ睆鎸夐挳锛堝彸涓嬭锛� */
+$('fs-btn').onclick = () => {
+  if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
+  else document.exitFullscreen();
+};
+
+/* ---------------- 涓诲惊鐜� ---------------- */
+let last = 0;
+function loop(ts) {
+  const dt = Math.min(50, ts - last || 16.7); last = ts;
+  const step = dt / 16.67;
+  if (state.screen === 'play' && !state.paused && !state.inventoryOpen) {
+    ensureAround();
+    updatePlayer(step);
+    updateMining(step);
+    updateDrops(step);
+    updateParticles(step);
+    checkNearTable();
+  }
+  updateCamera();
+  render();
+  requestAnimationFrame(loop);
+}
+
+/* ---------------- 鍚姩 ---------------- */
+renderHotbar();
+showOverlay('menu');
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
