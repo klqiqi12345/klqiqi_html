@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>wzz 大厅</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='black'/%3E%3Ctext x='16' y='22' font-size='16' font-family='Arial' fill='white' text-anchor='middle'%3Ew%3C/text%3E%3C/svg%3E">
+<style>
+  /* ===== 基础重置 ===== */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    width: 100%;
+    height: 100%;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                 "Microsoft YaHei", Helvetica, Arial, sans-serif;
+    background: #000;
+    color: #fff;
+    overflow: hidden;
+  }
+
+  /* ===== 视图切换（单页 hash 路由） ===== */
+  .view {
+    position: fixed;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+  }
+  .view.active { display: flex; }
+
+  /* ============================================================
+     视图一：wzz 大厅
+     ============================================================ */
+  #hall {
+    justify-content: flex-start;
+    padding-top: 14vh;
+  }
+
+  .hall-title {
+    font-size: clamp(56px, 10vw, 88px);
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    margin-bottom: 4vh;
+    user-select: none;
+  }
+
+  /* 类谷歌浏览器搜索框（纯框架，不可真实搜索） */
+  .search-frame {
+    display: flex;
+    align-items: center;
+    width: min(560px, 88vw);
+    height: 52px;
+    background: #202124;
+    border: 1px solid #5f6368;
+    border-radius: 26px;
+    padding: 0 18px;
+    gap: 12px;
+  }
+  .search-frame .search-icon {
+    flex: 0 0 auto;
+    width: 20px;
+    height: 20px;
+    color: #9aa0a6;
+  }
+  .search-frame input {
+    flex: 1 1 auto;
+    min-width: 0;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #e8eaed;
+    font-size: 16px;
+  }
+  .search-frame input::placeholder { color: #9aa0a6; }
+
+  /* 五个功能按钮 */
+  .hall-buttons {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: clamp(10px, 3vw, 28px);
+    margin-top: 5vh;
+    width: min(620px, 88vw);
+  }
+  .hall-btn-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+  .hall-btn {
+    width: 64px;
+    height: 64px;
+    border: 1px solid #5f6368;
+    border-radius: 16px;
+    background: #202124;
+    color: #e8eaed;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background .15s, border-color .15s, transform .1s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .hall-btn:hover { background: #2d2e32; border-color: #80868b; }
+  .hall-btn:active { transform: scale(0.95); }
+  .hall-btn svg { width: 30px; height: 30px; }
+  .hall-btn-label {
+    font-size: 13px;
+    color: #9aa0a6;
+    letter-spacing: 0.05em;
+  }
+
+  /* 占位按钮 toast 提示 */
+  #toast {
+    position: fixed;
+    left: 50%;
+    bottom: 8vh;
+    transform: translateX(-50%) translateY(20px);
+    background: #3c4043;
+    color: #fff;
+    padding: 10px 18px;
+    border-radius: 10px;
+    font-size: 14px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .2s, transform .2s;
+    z-index: 50;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ============================================================
+     视图二：反应力测试（参考 Human Benchmark Reaction Time）
+     ============================================================ */
+  #reaction {
+    justify-content: stretch;
+    background: #000;
+  }
+
+  .react-topbar {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    padding: 16px 20px;
+    gap: 12px;
+  }
+  .back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #202124;
+    border: 1px solid #5f6368;
+    color: #e8eaed;
+    border-radius: 10px;
+    padding: 9px 14px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background .15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .back-btn:hover { background: #2d2e32; }
+  .react-title {
+    font-size: 18px;
+    font-weight: 600;
+  }
+  .react-attempts {
+    margin-left: auto;
+    font-size: 14px;
+    color: #9aa0a6;
+  }
+
+  /* 主测试色块：整屏可点 */
+  .react-zone {
+    position: relative;
+    flex: 1 1 auto;
+    margin: 0 20px 20px;
+    border-radius: 18px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    cursor: pointer;
+    user-select: none;
+    text-align: center;
+    padding: 24px;
+    transition: background .1s;
+  }
+  .react-zone .big-text {
+    font-size: clamp(28px, 5vw, 42px);
+    font-weight: 700;
+  }
+  .react-zone .sub-text {
+    font-size: clamp(14px, 2.2vw, 18px);
+    opacity: 0.85;
+  }
+
+  /* 状态配色：等待（蓝灰）/ 变绿（绿）/ 抢跑（红）/ 结果（深色） */
+  .react-zone.state-wait { background: #2c4a7c; }
+  .react-zone.state-wait .big-text { color: #fff; }
+  .react-zone.state-wait .sub-text { color: #dbe6f5; }
+
+  .react-zone.state-green { background: #37b24d; cursor: crosshair; }
+  .react-zone.state-green .big-text,
+  .react-zone.state-green .sub-text { color: #fff; }
+
+  .react-zone.state-early { background: #c92a2a; }
+  .react-zone.state-early .big-text,
+  .react-zone.state-early .sub-text { color: #fff; }
+
+  .react-zone.state-result { background: #1f2328; }
+  .react-zone.state-result .big-text { color: #fff; }
+  .react-zone.state-result .sub-text { color: #adb5bd; }
+
+  /* 成绩记录条 */
+  .react-rounds {
+    display: flex;
+    gap: 10px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .round-chip {
+    min-width: 72px;
+    padding: 8px 12px;
+    border: 1px solid #5f6368;
+    border-radius: 10px;
+    font-size: 15px;
+    background: #202124;
+  }
+  .round-chip.empty { color: #6c757d; }
+
+  .react-average {
+    font-size: clamp(20px, 3.5vw, 28px);
+    font-weight: 700;
+  }
+
+  /* 窄屏适配 */
+  @media (max-width: 560px) {
+    .hall-buttons { grid-template-columns: repeat(5, 1fr); gap: 8px; }
+    .hall-btn { width: 52px; height: 52px; border-radius: 12px; }
+    .hall-btn svg { width: 24px; height: 24px; }
+    .hall-btn-label { font-size: 11px; }
+    .react-zone { margin: 0 12px 12px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ================= 视图：大厅 ================= -->
+<section id="hall" class="view active">
+  <h1 class="hall-title">wzz</h1>
+
+  <!-- 类谷歌搜索框（纯框架） -->
+  <div class="search-frame">
+    <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <circle cx="11" cy="11" r="7"></circle>
+      <line x1="20" y1="20" x2="16.5" y2="16.5"></line>
+    </svg>
+    <input type="text" placeholder="搜索框（演示框架，不可使用）" aria-label="搜索框">
+  </div>
+
+  <!-- 五个按钮：第一个 GAME 可进入反应力测试，其余为占位框架 -->
+  <div class="hall-buttons">
+    <div class="hall-btn-wrap">
+      <button class="hall-btn" id="btn-game" aria-label="GAME">
+        <!-- 游戏手柄图标 -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 9h4M8 7v4"></path>
+          <circle cx="15.5" cy="10" r="1"></circle>
+          <circle cx="17.5" cy="12" r="1"></circle>
+          <path d="M17.32 5H6.68a4 4 0 0 0-3.978 3.59l-.816 7A2.5 2.5 0 0 0 4.38 18.5 2.5 2.5 0 0 0 6.5 17l1.5-2h8l1.5 2a2.5 2.5 0 0 0 2.12 1.5 2.5 2.5 0 0 0 2.494-2.91l-.816-7A4 4 0 0 0 17.32 5Z"></path>
+        </svg>
+      </button>
+      <span class="hall-btn-label">GAME</span>
+    </div>
+
+    <div class="hall-btn-wrap">
+      <button class="hall-btn" data-placeholder="MUSIC" aria-label="MUSIC">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 18V5l12-2v13"></path>
+          <circle cx="6" cy="18" r="3"></circle>
+          <circle cx="18" cy="16" r="3"></circle>
+        </svg>
+      </button>
+      <span class="hall-btn-label">MUSIC</span>
+    </div>
+
+    <div class="hall-btn-wrap">
+      <button class="hall-btn" data-placeholder="VIDEO" aria-label="VIDEO">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="5" width="14" height="14" rx="2"></rect>
+          <path d="m16 10 6-3v10l-6-3"></path>
+        </svg>
+      </button>
+      <span class="hall-btn-label">VIDEO</span>
+    </div>
+
+    <div class="hall-btn-wrap">
+      <button class="hall-btn" data-placeholder="TOOL" aria-label="TOOL">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
+        </svg>
+      </button>
+      <span class="hall-btn-label">TOOL</span>
+    </div>
+
+    <div class="hall-btn-wrap">
+      <button class="hall-btn" data-placeholder="ABOUT" aria-label="ABOUT">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <path d="M12 16v-4M12 8h.01"></path>
+        </svg>
+      </button>
+      <span class="hall-btn-label">ABOUT</span>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 视图：反应力测试 ================= -->
+<section id="reaction" class="view">
+  <div class="react-topbar">
+    <button class="back-btn" id="btn-back">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="19" y1="12" x2="5" y2="12"></line>
+        <polyline points="12 19 5 12 12 5"></polyline>
+      </svg>
+      返回大厅
+    </button>
+    <span class="react-title">Reaction Time Test</span>
+    <span class="react-attempts" id="attempts-label">Attempts: 0 / 5</span>
+  </div>
+
+  <div class="react-zone state-wait" id="react-zone">
+    <div class="big-text" id="react-big">Click to Begin</div>
+    <div class="sub-text" id="react-sub">Wait for green, then click as fast as you can</div>
+    <div class="react-rounds" id="rounds"></div>
+  </div>
+</section>
+
+<div id="toast"></div>
+
+<script>
+/* ================= 视图路由 ================= */
+const hallView = document.getElementById('hall');
+const reactView = document.getElementById('reaction');
+
+function showView(name) {
+  hallView.classList.toggle('active', name === 'hall');
+  reactView.classList.toggle('active', name === 'reaction');
+  if (name === 'reaction') resetReaction();
+}
+
+/* ================= 大厅按钮 ================= */
+document.getElementById('btn-game').addEventListener('click', () => showView('reaction'));
+
+const toast = document.getElementById('toast');
+let toastTimer = null;
+function showToast(msg) {
+  toast.textContent = msg;
+  toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('show'), 1600);
+}
+
+// 其余四个按钮：仅有框架，点击给出占位反馈
+document.querySelectorAll('[data-placeholder]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    showToast(btn.dataset.placeholder + '：功能尚未开放（占位框架）');
+  });
+});
+
+document.getElementById('btn-back').addEventListener('click', () => showView('hall'));
+
+/* ================= 反应力测试逻辑 =================
+   流程：点击开始 → 蓝灰等待随机 1.5~3.5s → 变绿 → 立即点击记录 ms
+   抢跑判红；共 5 次，结束后显示平均反应时间。 */
+const zone = document.getElementById('react-zone');
+const bigText = document.getElementById('react-big');
+const subText = document.getElementById('react-sub');
+const attemptsLabel = document.getElementById('attempts-label');
+const roundsBox = document.getElementById('rounds');
+
+const MAX_ROUNDS = 5;
+let state = 'idle';          // idle | waiting | green | early | result
+let startTime = 0;
+let timer = null;
+let results = [];
+
+function resetReaction() {
+  results = [];
+  state = 'idle';
+  clearTimeout(timer);
+  renderRounds();
+  setZone('state-wait', 'Click to Begin', 'Wait for green, then click as fast as you can');
+  updateAttempts();
+}
+
+function updateAttempts() {
+  attemptsLabel.textContent = 'Attempts: ' + results.length + ' / ' + MAX_ROUNDS;
+}
+
+function renderRounds() {
+  roundsBox.innerHTML = '';
+  for (let i = 0; i < MAX_ROUNDS; i++) {
+    const chip = document.createElement('div');
+    if (results[i] != null) {
+      chip.className = 'round-chip';
+      chip.textContent = results[i] + ' ms';
+    } else {
+      chip.className = 'round-chip empty';
+      chip.textContent = '—';
+    }
+    roundsBox.appendChild(chip);
+  }
+}
+
+function setZone(cls, big, sub) {
+  zone.className = 'react-zone ' + cls;
+  bigText.textContent = big;
+  subText.textContent = sub;
+}
+
+function startWaiting() {
+  state = 'waiting';
+  setZone('state-wait', 'Wait for green...', 'Do not click yet');
+  const delay = 1500 + Math.random() * 2000; // 1.5s ~ 3.5s
+  timer = setTimeout(() => {
+    state = 'green';
+    startTime = performance.now();
+    setZone('state-green', 'Click!', '');
+  }, delay);
+}
+
+function handleEarly() {
+  state = 'early';
+  clearTimeout(timer);
+  setZone('state-early', 'Too soon!', 'Click to try again');
+}
+
+function recordResult() {
+  const rt = Math.round(performance.now() - startTime);
+  results.push(rt);
+  renderRounds();
+  updateAttempts();
+
+  if (results.length >= MAX_ROUNDS) {
+    state = 'result';
+    const avg = Math.round(results.reduce((a, b) => a + b, 0) / results.length);
+    setZone('state-result', avg + ' ms', 'Average reaction time — click to play again');
+  } else {
+    state = 'result';
+    setZone('state-result', rt + ' ms', 'Click to continue');
+  }
+}
+
+zone.addEventListener('click', () => {
+  if (state === 'idle' || state === 'result') {
+    startWaiting();
+  } else if (state === 'waiting') {
+    handleEarly();
+  } else if (state === 'green') {
+    recordResult();
+  } else if (state === 'early') {
+    startWaiting();
+  }
+});
+</script>
+</body>
+</html>
